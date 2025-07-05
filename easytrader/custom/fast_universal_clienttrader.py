@@ -4,10 +4,12 @@ import time
 import pywinauto
 import pywinauto.clipboard
 import functools
+from pywinauto.timings import wait_until_passes
 
 from easytrader import grid_strategies, pop_dialog_handler, refresh_strategies
 from .. import universal_clienttrader
 from easytrader.utils.perf import perf_clock
+from easytrader.log import logger
 import easyutils
 
 # 自定义加速的同花顺客户端，用了一些魔法
@@ -21,13 +23,13 @@ class FastUniversalClientTrader(universal_clienttrader.UniversalClientTrader):
     @perf_clock
     def _switch_left_menus(self, path, sleep=0.2):
         if ("F1" in path[0] and len(path) == 1):
-            return self._switch_left_menus_by_shortcut("{F1}", sleep=0.1)
+            return self._switch_left_menus_by_shortcut("{F1}", sleep=0.2)
         elif ("F2" in path[0] and len(path) == 1):
-            return self._switch_left_menus_by_shortcut("{F2}", sleep=0.1)
+            return self._switch_left_menus_by_shortcut("{F2}", sleep=0.2)
         elif ("F3" in path[0] and len(path) == 1):
-            return self._switch_left_menus_by_shortcut("{F3}", sleep=0.1)
+            return self._switch_left_menus_by_shortcut("{F3}", sleep=0.2)
         elif ("F4" in path[0] and len(path) == 1):
-            return self._switch_left_menus_by_shortcut("{F4}", sleep=0.1)
+            return self._switch_left_menus_by_shortcut("{F4}", sleep=0.2)
         else:
             return super()._switch_left_menus(path, sleep)
 
@@ -58,6 +60,7 @@ class FastUniversalClientTrader(universal_clienttrader.UniversalClientTrader):
     @perf_clock
     def buy(self, security, price, amount):
         # 两次操作可以聚焦到首个输入框
+        # 不过稳定性需要优化，偶现在卖出界面买入的情况
         self._switch_left_menus(["卖出[F2]"])
         self._switch_left_menus(["买入[F1]"])
 

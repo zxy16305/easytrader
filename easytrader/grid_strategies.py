@@ -103,13 +103,14 @@ class Copy(BaseStrategy):
     @perf_clock
     def _get_clipboard_data(self) -> str:
         if Copy._need_captcha_reg:
+            # 这里如果不等待，dialog 获取到的可能是 main windows
+            time.sleep(0.5)
+            found = False
             dialog = self._trader.app.top_window()
             if (
                     dialog.window(class_name="Static", title_re="验证码").exists(timeout=1)
             ):
-                time.sleep(0.1)
                 count = 5
-                found = False
 
                 while count > 0:
                     final_tmp_path = "tmp-{}.png".format(count)
@@ -152,7 +153,9 @@ class Copy(BaseStrategy):
                     ).click()
                     self._trader.wait(0.1)
             if not found:
-                    dialog.Button2.click()  # 点击取消
+                logger.info(f"当前顶层窗口标题: {dialog.window_text()}")
+                logger.info(f"当前顶层窗口类名: {dialog.class_name()}")
+                dialog.Button2.click()  # 点击取消
             # else:
                 # 验证码 3 次后才弹出来，没必要提前 False
                 # Copy._need_captcha_reg = False
