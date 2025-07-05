@@ -98,6 +98,10 @@ class ClientTrader(IClientTrader):
         return self._main
 
     @property
+    def main_wrapper(self):
+        return self._main_wrapper
+
+    @property
     def config(self):
         return self._config
 
@@ -116,6 +120,7 @@ class ClientTrader(IClientTrader):
         self._app = pywinauto.Application().connect(path=connect_path, timeout=10)
         self._close_prompt_windows()
         self._main = self._app.top_window()
+        self._main_wrapper = self._main.wrapper_object()
         self._init_toolbar()
 
     @property
@@ -171,6 +176,7 @@ class ClientTrader(IClientTrader):
         self.refresh()
         for i, entrust in enumerate(self.cancel_entrusts):
             if entrust[self._config.CANCEL_ENTRUST_ENTRUST_FIELD] == entrust_no:
+                time.sleep(0.1)
                 self._cancel_entrust_by_double_click(i)
                 return self._handle_pop_dialogs()
         return {"message": "委托单状态错误不能撤单, 该委托单可能已经成交或者已撤"}
@@ -359,10 +365,10 @@ class ClientTrader(IClientTrader):
 
     @perf_clock
     def is_exist_pop_dialog(self):
-        self.wait(0.5)  # wait dialog display
+        self.wait(0.2)  # wait dialog display
         try:
             return (
-                self._main.wrapper_object() != self._app.top_window().wrapper_object()
+                    self._main_wrapper != self._app.top_window().wrapper_object()
             )
         except (
             findwindows.ElementNotFoundError,
@@ -375,11 +381,11 @@ class ClientTrader(IClientTrader):
     @perf_clock
     def close_pop_dialog(self):
         try:
-            if self._main.wrapper_object() != self._app.top_window().wrapper_object():
+            if self._main_wrapper != self._app.top_window().wrapper_object():
                 w = self._app.top_window()
                 if w is not None:
                     w.close()
-                    self.wait(0.2)
+                    w.wait_not("exists", 0.5)
         except (
                 findwindows.ElementNotFoundError,
                 timings.TimeoutError,
@@ -567,8 +573,15 @@ class ClientTrader(IClientTrader):
 
         while self.is_exist_pop_dialog():
             try:
+                # 撤单成功弹窗，直接关闭，会干扰判断
+                top_window = self._app.top_window()
+                if top_window.class_name() == 'Afx:005D0000:843:00000000:00000005:00000000':
+                    top_window.close()
+                    top_window.wait_not("exists", timeout=0.5)
+                    continue
                 title = self._get_pop_dialog_title()
-            except pywinauto.findwindows.ElementNotFoundError:
+            except pywinauto.findwindows.ElementNotFoundError as e:
+                logger.exception("_handle_pop_dialogs: %s", e)
                 return {"message": "success"}
 
             result = handler.handle(title)

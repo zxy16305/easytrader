@@ -1,17 +1,23 @@
 import re
 
 import requests
-from PIL import Image
+from PIL import Image, ImageFilter, ImageEnhance
 
 from easytrader import exceptions
+from easytrader.utils.perf import perf_clock
 
 
+@perf_clock
 def captcha_recognize(img_path):
     import pytesseract
 
+    # 关键配置：只识别大小写字母和数字
+    custom_config = r'--oem 3 --psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    # 打开图像并转换为灰度
     im = Image.open(img_path).convert("L")
-    # 1. threshold the image
-    threshold = 200
+    im = enhance_contrast(im)
+    # 1. threshold the image，原阈值是 200
+    threshold = 220
     table = []
     for i in range(256):
         if i < threshold:
@@ -21,9 +27,12 @@ def captcha_recognize(img_path):
 
     out = im.point(table, "1")
     # 2. recognize with tesseract
-    num = pytesseract.image_to_string(out)
+    num = pytesseract.image_to_string(out, config=custom_config)
     return num
 
+def enhance_contrast(img):
+    enhancer = ImageEnhance.Contrast(img)
+    return enhancer.enhance(2.0)  # 增强对比度
 
 def recognize_verify_code(image_path, broker="ht"):
     """识别验证码，返回识别后的字符串，使用 tesseract 实现

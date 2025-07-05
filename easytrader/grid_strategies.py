@@ -2,6 +2,7 @@
 import abc
 import io
 import tempfile
+import time
 from io import StringIO
 from typing import TYPE_CHECKING, Dict, List, Optional
 
@@ -12,6 +13,7 @@ import pywinauto.clipboard
 
 from easytrader.log import logger
 from easytrader.utils.captcha import captcha_recognize
+from easytrader.utils.perf import perf_clock
 from easytrader.utils.win_gui import SetForegroundWindow, ShowWindow, win32defines
 
 if TYPE_CHECKING:
@@ -50,12 +52,14 @@ class BaseStrategy(IGridStrategy):
         """
         pass
 
+    @perf_clock
     def _get_grid(self, control_id: int):
         grid = self._trader.main.child_window(
             control_id=control_id, class_name="CVirtualGridCtrl"
         )
         return grid
 
+    @perf_clock
     def _set_foreground(self, grid=None):
         try:
             if grid is None:
@@ -77,11 +81,13 @@ class Copy(BaseStrategy):
 
     def get(self, control_id: int) -> List[Dict]:
         grid = self._get_grid(control_id)
-        self._set_foreground(grid)
+        # 不知道干啥的，很慢
+        # self._set_foreground(grid)
         grid.type_keys("^A^C", set_foreground=False)
         content = self._get_clipboard_data()
         return self._format_grid_data(content)
 
+    @perf_clock
     def _format_grid_data(self, data: str) -> List[Dict]:
         try:
             df = pd.read_csv(
@@ -94,26 +100,31 @@ class Copy(BaseStrategy):
         except:
             Copy._need_captcha_reg = True
 
+    @perf_clock
     def _get_clipboard_data(self) -> str:
         if Copy._need_captcha_reg:
+            dialog = self._trader.app.top_window()
             if (
-                    self._trader.app.top_window().window(class_name="Static", title_re="验证码").exists(timeout=1)
+                    dialog.window(class_name="Static", title_re="验证码").exists(timeout=1)
             ):
-                file_path = "tmp.png"
+                time.sleep(0.1)
                 count = 5
                 found = False
+
                 while count > 0:
-                    self._trader.app.top_window().window(
+                    final_tmp_path = "tmp-{}.png".format(count)
+                    dialog.window(
                         control_id=0x965, class_name="Static"
                     ).capture_as_image().save(
-                        file_path
+                        final_tmp_path
                     )  # 保存验证码
 
-                    captcha_num = captcha_recognize(file_path).strip()  # 识别验证码
+                    captcha_num = captcha_recognize(final_tmp_path).strip()  # 识别验证码
                     captcha_num = "".join(captcha_num.split())
                     logger.info("captcha result-->" + captcha_num)
+                    logger.info("captcha file-->" + final_tmp_path)
                     if len(captcha_num) == 4:
-                        editor = self._trader.app.top_window().window(
+                        editor = dialog.window(
                             control_id=0x964, class_name="Edit"
                         )
                         self._trader.type_edit_control_keys(
@@ -121,27 +132,30 @@ class Copy(BaseStrategy):
                             captcha_num
                         )  # 模拟输入验证码
 
-                        self._trader.app.top_window().set_focus()
-                        pywinauto.keyboard.SendKeys("{ENTER}")  # 模拟发送enter，点击确定
+                        dialog.set_focus()
+                        pywinauto.keyboard.send_keys("{ENTER}")  # 模拟发送enter，点击确定
                         try:
-                            logger.info(
-                                self._trader.app.top_window()
-                                    .window(control_id=0x966, class_name="Static")
-                                    .window_text()
-                            )
-                        except Exception as ex:  # 窗体消失
-                            logger.exception(ex)
+                            # 等待 0.5s 直到窗口消失
+                            dialog.wait_not("exists", timeout=0.5)
                             found = True
                             break
+                        except Exception as ex:  # 窗体没消失
+                            logger.info(
+                                dialog
+                                .child_window(control_id=0x966, class_name="Static")
+                                .window_text()
+                            )
+                            logger.exception(ex)
                     count -= 1
-                    self._trader.wait(0.1)
-                    self._trader.app.top_window().window(
+                    dialog.window(
                         control_id=0x965, class_name="Static"
                     ).click()
-                if not found:
-                    self._trader.app.top_window().Button2.click()  # 点击取消
-            else:
-                Copy._need_captcha_reg = False
+                    self._trader.wait(0.1)
+            if not found:
+                    dialog.Button2.click()  # 点击取消
+            # else:
+                # 验证码 3 次后才弹出来，没必要提前 False
+                # Copy._need_captcha_reg = False
         count = 5
         while count > 0:
             try:

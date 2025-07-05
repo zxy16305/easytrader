@@ -1,11 +1,13 @@
 # coding:utf-8
 import re
 import time
+import logging
 from typing import Optional
 
 from easytrader import exceptions
 from easytrader.utils.perf import perf_clock
 from easytrader.utils.win_gui import SetForegroundWindow, ShowWindow, win32defines
+from easytrader.log import logger
 
 
 class PopDialogHandler:
@@ -70,7 +72,7 @@ class TradePopDialogHandler(PopDialogHandler):
                 self._submit_by_shortcut()
                 return None
 
-            if "委托价格的小数价格应为" in content:
+            if "委托价格的小数价格应为" in content or "委托价格的小数部分应为" in content:
                 self._submit_by_shortcut()
                 return None
 

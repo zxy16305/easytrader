@@ -73,7 +73,12 @@ def use(broker, debug=False, **kwargs):
         from .clienttrader import ClientTrader
 
         return ClientTrader()
-    
+
+    if broker.lower() in ["fast_universal_client", "快速同花顺客户端"]:
+        from .custom.fast_universal_clienttrader import FastUniversalClientTrader
+
+        return FastUniversalClientTrader()
+
     if broker.lower() in ["miniqmt"]:
         try:
             import xtquant
